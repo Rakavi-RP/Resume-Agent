@@ -38,7 +38,8 @@ def process_application(resume_file, jd_file, company_name):
         company_name: Company name for personalization
         
     Returns:
-        Final output text
+        Tuple of (ats_md, ats_copy, cover_md, cover_copy, bullets_md, bullets_copy, 
+                  interview_md, interview_copy, role_md, role_copy, skill_md, skill_copy)
     """
     try:
         # Parse documents
@@ -49,16 +50,25 @@ def process_application(resume_file, jd_file, company_name):
         last_state["jd"] = docs["jd"]
         
         # Run agent
-        output = run_agent(
+        result = run_agent(
             docs["resume"],
             docs["jd"],
             company_name or "the company"
         )
         
-        return output
+        # Return both markdown display and copy textbox values
+        return (
+            result["ats"], result["ats"],
+            result["cover_letter"], result["cover_letter"],
+            result["bullets"], result["bullets"],
+            result["interview"], result["interview"],
+            result["role_expectations"], result["role_expectations"],
+            result["skill_growth"], result["skill_growth"]
+        )
     
     except Exception as e:
-        return f"❌ Error: {str(e)}\n\nPlease check your API key and try again."
+        error_msg = f"❌ Error: {str(e)}\n\nPlease check your API key and try again."
+        return (error_msg, "", "", "", "", "", "", "", "", "", "", "")
 
 
 def qa_about_match(question):
@@ -156,8 +166,8 @@ with gr.Blocks(title="Resume Job Application Agent", theme=gr.themes.Soft()) as 
     
     gr.Markdown(
         """
-        # 🎯 Resume → Job Application Agent
-        ### Powered by LangGraph + Google Gemini
+        <h1 style='text-align:center;'>🎯 Resume → Job Application Agent</h1>
+        <p style='text-align:center;'>Powered by LangGraph + Google Gemini</p>
         """
     )
     
@@ -167,7 +177,8 @@ with gr.Blocks(title="Resume Job Application Agent", theme=gr.themes.Soft()) as 
             gr.Markdown("**Full AI Agent Workflow** - Complete job application package with ATS analysis, cover letter, resume optimization, interview prep, role research, and learning plan.")
             
             with gr.Row():
-                with gr.Column():
+                # Left Column: Inputs
+                with gr.Column(scale=1):
                     agent_resume = gr.File(label="📄 Upload Resume (PDF)", file_types=[".pdf"])
                     agent_jd = gr.File(label="📋 Upload Job Description (PDF)", file_types=[".pdf"])
                     agent_company = gr.Textbox(
@@ -176,18 +187,52 @@ with gr.Blocks(title="Resume Job Application Agent", theme=gr.themes.Soft()) as 
                     )
                     agent_run_btn = gr.Button("🚀 Run Agent", variant="primary", size="lg")
                 
-                with gr.Column():
-                    agent_output = gr.Textbox(
-                        label="📦 Complete Job Application Package",
-                        lines=30,
-                        max_lines=35,
-                        show_copy_button=True
-                    )
+                # Right Column: Outputs
+                with gr.Column(scale=2):
+                    gr.Markdown("### 📊 Results")
+                    
+                    # ATS Analysis
+                    gr.Markdown("#### ATS Analysis")
+                    ats_output = gr.Markdown()
+                    ats_copy = gr.Textbox(visible=False, show_copy_button=True, label="Copy ATS")
+                    
+                    # Cover Letter
+                    gr.Markdown("#### ✍️ Cover Letter")
+                    cover_letter_output = gr.Markdown()
+                    cover_copy = gr.Textbox(visible=False, show_copy_button=True, label="Copy Cover Letter")
+                    
+                    # Resume Bullets
+                    gr.Markdown("#### 📝 Optimized Resume Bullets")
+                    bullets_output = gr.Markdown()
+                    bullets_copy = gr.Textbox(visible=False, show_copy_button=True, label="Copy Bullets")
+                    
+                    # Interview Prep
+                    gr.Markdown("#### 💼 Interview Preparation")
+                    interview_output = gr.Markdown()
+                    interview_copy = gr.Textbox(visible=False, show_copy_button=True, label="Copy Interview")
+                    
+                    # Role Expectations
+                    gr.Markdown("#### 🔬 Role Expectations")
+                    role_output = gr.Markdown()
+                    role_copy = gr.Textbox(visible=False, show_copy_button=True, label="Copy Role")
+                    
+                    # Skill Growth Plan
+                    gr.Markdown("#### 📚 Skill Growth Plan")
+                    skill_growth_output = gr.Markdown()
+                    skill_copy = gr.Textbox(visible=False, show_copy_button=True, label="Copy Skills")
             
+            # Button click handler
             agent_run_btn.click(
                 fn=process_application,
                 inputs=[agent_resume, agent_jd, agent_company],
-                outputs=agent_output
+                outputs=[
+                    ats_output, ats_copy,
+                    cover_letter_output, cover_copy,
+                    bullets_output, bullets_copy,
+                    interview_output, interview_copy,
+                    role_output, role_copy,
+                    skill_growth_output, skill_copy
+                ]
             )
         
         # Tab 2: Ask the Agent
@@ -200,11 +245,7 @@ with gr.Blocks(title="Resume Job Application Agent", theme=gr.themes.Soft()) as 
                 lines=3
             )
             qa_btn = gr.Button("Ask", variant="primary")
-            qa_output = gr.Textbox(
-                label="💡 Answer",
-                lines=15,
-                show_copy_button=True
-            )
+            qa_output = gr.Markdown(label="💡 Answer")
             
             qa_btn.click(
                 fn=qa_about_match,
@@ -213,65 +254,16 @@ with gr.Blocks(title="Resume Job Application Agent", theme=gr.themes.Soft()) as 
             )
             
             gr.Markdown("*Note: Run the agent in 'Agent Mode' first to analyze your documents.*")
-        
-        # Tab 3: Manual Tools
-        with gr.Tab("🛠️ Manual Tools"):
-            gr.Markdown("**Individual Tools** - Run specific tools independently.")
-            
-            with gr.Accordion("📊 ATS Analysis Only", open=False):
-                with gr.Row():
-                    with gr.Column():
-                        ats_resume = gr.File(label="Resume PDF", file_types=[".pdf"])
-                        ats_jd = gr.File(label="JD PDF", file_types=[".pdf"])
-                        ats_btn = gr.Button("Analyze ATS Score", variant="secondary")
-                    with gr.Column():
-                        ats_output = gr.Textbox(label="ATS Results", lines=15, show_copy_button=True)
-                
-                ats_btn.click(
-                    fn=run_ats_only,
-                    inputs=[ats_resume, ats_jd],
-                    outputs=ats_output
-                )
-            
-            with gr.Accordion("✍️ Cover Letter Only", open=False):
-                with gr.Row():
-                    with gr.Column():
-                        cl_resume = gr.File(label="Resume PDF", file_types=[".pdf"])
-                        cl_jd = gr.File(label="JD PDF", file_types=[".pdf"])
-                        cl_company = gr.Textbox(label="Company Name", placeholder="Optional")
-                        cl_btn = gr.Button("Generate Cover Letter", variant="secondary")
-                    with gr.Column():
-                        cl_output = gr.Textbox(label="Cover Letter", lines=15, show_copy_button=True)
-                
-                cl_btn.click(
-                    fn=run_cover_letter_only,
-                    inputs=[cl_resume, cl_jd, cl_company],
-                    outputs=cl_output
-                )
-            
-            with gr.Accordion("💼 Interview Prep Only", open=False):
-                with gr.Row():
-                    with gr.Column():
-                        int_resume = gr.File(label="Resume PDF", file_types=[".pdf"])
-                        int_jd = gr.File(label="JD PDF", file_types=[".pdf"])
-                        int_btn = gr.Button("Generate Interview Questions", variant="secondary")
-                    with gr.Column():
-                        int_output = gr.Textbox(label="Interview Questions", lines=15, show_copy_button=True)
-                
-                int_btn.click(
-                    fn=run_interview_prep_only,
-                    inputs=[int_resume, int_jd],
-                    outputs=int_output
-                )
     
     gr.Markdown(
         """
         ---
-        **Note:** Processing takes 30-90 seconds depending on the mode. PDFs must be text-based (not scanned images).
+        **Note:** Processing takes 30-90 seconds. PDFs must be text-based (not scanned images).
         """
     )
 
 
 if __name__ == "__main__":
     demo.launch(share=False)
+
 
