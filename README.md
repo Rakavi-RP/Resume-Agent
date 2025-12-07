@@ -103,10 +103,3 @@ The agent uses a sequential state machine:
 - ✅ Clean UI with Gradio
 - ✅ Free tier compatible (Gemini API)
 
-## 📝 License
-
-MIT
-
-## 👤 Author
-
-[Your Name] - [Hackathon Submission]
