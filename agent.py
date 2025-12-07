@@ -95,21 +95,25 @@ def resume_optimizer_node(state: AgentState) -> AgentState:
 
 
 def resume_improvement_node(state: AgentState) -> AgentState:
-    """Generate resume improvement suggestions for low ATS scores."""
-    print("⚠️ Low ATS score detected - generating improvement suggestions...")
+    """Generate resume improvement suggestions based on ATS score."""
+    print(f"⚠️ ATS Score {state['ats_score']} - generating improvement suggestions...")
     
     try:
         suggestions = generate_resume_improvements(
             state["resume"],
             state["jd"],
             state["matched_skills"],
-            state["missing_skills"]
+            state["missing_skills"],
+            state["ats_score"]  # Pass ATS score for conditional logic
         )
         state["improvement_suggestions"] = suggestions
-        print("✅ Improvement suggestions generated")
+        if suggestions:
+            print("✅ Improvement suggestions generated")
+        else:
+            print("✅ No suggestions needed (high ATS score)")
     except Exception as e:
         print(f"❌ Error generating improvement suggestions: {str(e)}")
-        state["improvement_suggestions"] = f"❌ Improvement suggestions failed: {str(e)}"
+        state["improvement_suggestions"] = ""
     
     return state
 
@@ -184,17 +188,13 @@ def revise_output_node(state: AgentState) -> AgentState:
 
 
 def route_after_ats(state: AgentState) -> str:
-    """Conditional routing based on ATS score."""
-    if state["ats_score"] < 60:
-        print(f"⚠️ ATS Score {state['ats_score']} < 60: Routing to resume_improvement")
-        return "resume_improvement"
-    else:
-        print(f"✅ ATS Score {state['ats_score']} >= 60: Proceeding to cover_letter")
-        return "generate_cover_letter"
+    """Route to resume improvement (which handles conditional logic internally)."""
+    print(f"✅ ATS Score {state['ats_score']}: Routing to resume_improvement")
+    return "resume_improvement"
 
 
 def create_agent():
-    """Create the LangGraph agent workflow with conditional routing."""
+    """Create the LangGraph agent workflow."""
     
     # Create graph
     workflow = StateGraph(AgentState)
@@ -214,17 +214,16 @@ def create_agent():
     workflow.set_entry_point("parse")
     workflow.add_edge("parse", "ats_analysis")
     
-    # Conditional routing after ATS analysis
+    # Always route to resume_improvement after ATS
     workflow.add_conditional_edges(
         "ats_analysis",
         route_after_ats,
         {
-            "resume_improvement": "resume_improvement",
-            "generate_cover_letter": "generate_cover_letter"
+            "resume_improvement": "resume_improvement"
         }
     )
     
-    # Both paths converge at cover_letter
+    # Continue workflow
     workflow.add_edge("resume_improvement", "generate_cover_letter")
     workflow.add_edge("generate_cover_letter", "resume_optimizer")
     workflow.add_edge("resume_optimizer", "interview_prep")
@@ -250,7 +249,15 @@ def run_agent(resume_text: str, jd_text: str, company_name: str = "the company")
         company_name: Company name for cover letter
         
     Returns:
-        Dictionary with separate sections for UI display
+        Dictionary with separate sections for UI display:
+        - ats_section: ATS score and skills analysis
+        - resume_suggestions_section: Resume improvement suggestions
+        - cover_letter_section: Generated cover letter
+        - bullets_section: Optimized resume bullets
+        - interview_section: Interview questions
+        - role_expectations_section: Role research
+        - skill_growth_section: Learning plan
+        - full_report: Complete combined report
     """
     agent = create_agent()
     
@@ -272,28 +279,95 @@ def run_agent(resume_text: str, jd_text: str, company_name: str = "the company")
     # Run the agent
     final_state = agent.invoke(initial_state)
     
-    # Build ATS section
-    improvement_section = ""
-    if final_state.get("improvement_suggestions"):
-        improvement_section = f"\n\n### 📋 Improvement Suggestions\n\n{final_state['improvement_suggestions']}"
+    # Build ATS section (plain text, no markdown)
+    matched_skills_text = "\n".join(f"  • {skill}" for skill in final_state['matched_skills'][:15])
+    missing_skills_text = "\n".join(f"  • {skill}" for skill in final_state['missing_skills'][:15])
     
-    ats_section = f"""### 📊 ATS Match Score: {final_state['ats_score']}/100
+    ats_section = f"""ATS MATCH SCORE: {final_state['ats_score']}/100
 
-#### ✅ Matched Skills
-{chr(10).join(f"- {skill}" for skill in final_state['matched_skills'][:10])}
+MATCHED SKILLS:
+{matched_skills_text}
 
-#### ❌ Skills Gap
-{chr(10).join(f"- {skill}" for skill in final_state['missing_skills'][:10])}
-{improvement_section}
+MISSING SKILLS:
+{missing_skills_text}
+"""
+    
+    # Resume suggestions section (separate from ATS)
+    resume_suggestions_section = final_state.get("improvement_suggestions", "")
+    
+    # Cover letter section
+    cover_letter_section = final_state["cover_letter"]
+    
+    # Optimized bullets section
+    bullets_section = final_state["optimized_bullets"]
+    
+    # Interview preparation section
+    interview_section = final_state["interview_questions"]
+    
+    # Role expectations section
+    role_expectations_section = final_state["role_expectations"]
+    
+    # Skill growth plan section
+    skill_growth_section = final_state["learning_plan"]
+    
+    # Build full report combining all sections
+    full_report = f"""
+{'='*80}
+COMPLETE JOB APPLICATION PACKAGE
+{'='*80}
+
+{ats_section}
+
+{'='*80}
+RESUME IMPROVEMENT SUGGESTIONS
+{'='*80}
+
+{resume_suggestions_section if resume_suggestions_section else "No additional suggestions needed."}
+
+{'='*80}
+COVER LETTER
+{'='*80}
+
+{cover_letter_section}
+
+{'='*80}
+OPTIMIZED RESUME BULLETS
+{'='*80}
+
+{bullets_section}
+
+{'='*80}
+INTERVIEW PREPARATION
+{'='*80}
+
+{interview_section}
+
+{'='*80}
+ROLE EXPECTATIONS & RESEARCH
+{'='*80}
+
+{role_expectations_section}
+
+{'='*80}
+SKILL GROWTH PLAN
+{'='*80}
+
+{skill_growth_section}
+
+{'='*80}
+END OF REPORT
+{'='*80}
 """
     
     # Return structured dictionary
     return {
-        "ats": ats_section,
-        "cover_letter": final_state["cover_letter"],
-        "bullets": final_state["optimized_bullets"],
-        "interview": final_state["interview_questions"],
-        "role_expectations": final_state["role_expectations"],
-        "skill_growth": final_state["learning_plan"]
+        "ats_section": ats_section,
+        "resume_suggestions_section": resume_suggestions_section,
+        "cover_letter_section": cover_letter_section,
+        "bullets_section": bullets_section,
+        "interview_section": interview_section,
+        "role_expectations_section": role_expectations_section,
+        "skill_growth_section": skill_growth_section,
+        "full_report": full_report
     }
 

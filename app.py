@@ -24,7 +24,8 @@ if not os.getenv("GOOGLE_API_KEY"):
 last_state = {
     "resume": "",
     "jd": "",
-    "ats_result": None
+    "ats_result": None,
+    "full_report": ""
 }
 
 
@@ -38,8 +39,7 @@ def process_application(resume_file, jd_file, company_name):
         company_name: Company name for personalization
         
     Returns:
-        Tuple of (ats_md, ats_copy, cover_md, cover_copy, bullets_md, bullets_copy, 
-                  interview_md, interview_copy, role_md, role_copy, skill_md, skill_copy)
+        Tuple of (ats_section, resume_suggestions, cover_letter, interview, role, skill_growth, full_report)
     """
     try:
         # Parse documents
@@ -56,19 +56,24 @@ def process_application(resume_file, jd_file, company_name):
             company_name or "the company"
         )
         
-        # Return both markdown display and copy textbox values
+        # Store full report for potential download
+        last_state["full_report"] = result.get("full_report", "")
+        
+        # Return results for each section (order matches UI outputs)
+        # Wrap HTML sections for proper rendering
         return (
-            result["ats"], result["ats"],
-            result["cover_letter"], result["cover_letter"],
-            result["bullets"], result["bullets"],
-            result["interview"], result["interview"],
-            result["role_expectations"], result["role_expectations"],
-            result["skill_growth"], result["skill_growth"]
+            result["ats_section"],
+            html_wrap(result["resume_suggestions_section"]),
+            result["cover_letter_section"],
+            html_wrap(result["interview_section"]),
+            html_wrap(result["role_expectations_section"]),
+            html_wrap(result["skill_growth_section"]),
+            result["full_report"]
         )
     
     except Exception as e:
         error_msg = f"❌ Error: {str(e)}\n\nPlease check your API key and try again."
-        return (error_msg, "", "", "", "", "", "", "", "", "", "", "")
+        return (error_msg, html_wrap(""), "", html_wrap(""), html_wrap(""), html_wrap(""), "")
 
 
 def qa_about_match(question):
@@ -117,6 +122,23 @@ Answer:
         return f"❌ Error: {str(e)}"
 
 
+def html_wrap(content):
+    """
+    Wrap content in HTML div for proper rendering.
+    
+    Args:
+        content: Text content to wrap
+        
+    Returns:
+        HTML-wrapped content
+    """
+    if not content or content.startswith("❌"):
+        return f"<div style='padding: 20px; color: #888;'>{content if content else 'No content available.'}</div>"
+    
+    # Wrap in a styled div
+    return f"<div style='padding: 20px; line-height: 1.6; white-space: pre-wrap;'>{content}</div>"
+
+
 def run_ats_only(resume_file, jd_file):
     """Run ATS analysis only."""
     try:
@@ -161,6 +183,34 @@ def run_interview_prep_only(resume_file, jd_file):
         return f"❌ Error: {str(e)}"
 
 
+def prepare_download(full_report_text):
+    """
+    Prepare the full report for download.
+    
+    Args:
+        full_report_text: The complete report text
+        
+    Returns:
+        Path to the saved report file
+    """
+    import tempfile
+    import os
+    
+    if not full_report_text or full_report_text.startswith("❌"):
+        return None
+    
+    # Create a temporary file
+    temp_dir = tempfile.gettempdir()
+    report_path = os.path.join(temp_dir, "job_application_report.txt")
+    
+    # Write the report to file
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write(full_report_text)
+    
+    return report_path
+
+
+
 # Create Gradio interface with tabs
 with gr.Blocks(title="Resume Job Application Agent", theme=gr.themes.Soft()) as demo:
     
@@ -176,63 +226,120 @@ with gr.Blocks(title="Resume Job Application Agent", theme=gr.themes.Soft()) as 
         with gr.Tab("🤖 Agent Mode"):
             gr.Markdown("**Full AI Agent Workflow** - Complete job application package with ATS analysis, cover letter, resume optimization, interview prep, role research, and learning plan.")
             
+            # Add top margin and center the input section
+            gr.Markdown("<div style='margin-top: 30px;'></div>")
+            
+            # Input Section - Top Center with better styling
             with gr.Row():
-                # Left Column: Inputs
                 with gr.Column(scale=1):
-                    agent_resume = gr.File(label="📄 Upload Resume (PDF)", file_types=[".pdf"])
-                    agent_jd = gr.File(label="📋 Upload Job Description (PDF)", file_types=[".pdf"])
-                    agent_company = gr.Textbox(
-                        label="🏢 Company Name (Optional)",
-                        placeholder="e.g., Google, Microsoft"
-                    )
-                    agent_run_btn = gr.Button("🚀 Run Agent", variant="primary", size="lg")
-                
-                # Right Column: Outputs
+                    pass  # Left spacer
                 with gr.Column(scale=2):
-                    gr.Markdown("### 📊 Results")
-                    
-                    # ATS Analysis
-                    gr.Markdown("#### ATS Analysis")
-                    ats_output = gr.Markdown()
-                    ats_copy = gr.Textbox(visible=False, show_copy_button=True, label="Copy ATS")
-                    
-                    # Cover Letter
-                    gr.Markdown("#### ✍️ Cover Letter")
-                    cover_letter_output = gr.Markdown()
-                    cover_copy = gr.Textbox(visible=False, show_copy_button=True, label="Copy Cover Letter")
-                    
-                    # Resume Bullets
-                    gr.Markdown("#### 📝 Optimized Resume Bullets")
-                    bullets_output = gr.Markdown()
-                    bullets_copy = gr.Textbox(visible=False, show_copy_button=True, label="Copy Bullets")
-                    
-                    # Interview Prep
-                    gr.Markdown("#### 💼 Interview Preparation")
-                    interview_output = gr.Markdown()
-                    interview_copy = gr.Textbox(visible=False, show_copy_button=True, label="Copy Interview")
-                    
-                    # Role Expectations
-                    gr.Markdown("#### 🔬 Role Expectations")
-                    role_output = gr.Markdown()
-                    role_copy = gr.Textbox(visible=False, show_copy_button=True, label="Copy Role")
-                    
-                    # Skill Growth Plan
-                    gr.Markdown("#### 📚 Skill Growth Plan")
-                    skill_growth_output = gr.Markdown()
-                    skill_copy = gr.Textbox(visible=False, show_copy_button=True, label="Copy Skills")
+                    with gr.Group():
+                        agent_resume = gr.File(label="📄 Upload Resume (PDF)", file_types=[".pdf"])
+                        agent_jd = gr.File(label="📋 Upload Job Description (PDF)", file_types=[".pdf"])
+                        agent_company = gr.Textbox(
+                            label="🏢 Company Name (Optional)",
+                            placeholder="e.g., Google, Microsoft"
+                        )
+                        agent_run_btn = gr.Button("🚀 Run Agent", variant="primary", size="lg")
+                with gr.Column(scale=1):
+                    pass  # Right spacer
+            
+            gr.Markdown("<div style='margin-top: 40px;'></div>")
+            gr.Markdown("<h2 style='text-align: center;'>📊 Results Dashboard</h2>")
+            gr.Markdown("<div style='margin-bottom: 20px;'></div>")
+            
+            # Results Section - Full Width with card-like panels
+            # ATS Analysis Section
+            with gr.Group():
+                gr.Markdown("<h3>📊 ATS Analysis</h3>")
+                ats_output = gr.Textbox(
+                    label="",
+                    lines=10,
+                    show_copy_button=True,
+                    placeholder="Results will appear here after running the agent...",
+                    interactive=False
+                )
+            
+            # Resume Improvement Suggestions Section
+            with gr.Group():
+                gr.Markdown("<h3>📝 Resume Improvement Suggestions</h3>")
+                bullets_output = gr.HTML(
+                    label="",
+                    value="<p style='color: #888; padding: 20px;'>Results will appear here after running the agent...</p>"
+                )
+            
+            # Cover Letter Section
+            with gr.Group():
+                gr.Markdown("<h3>✍️ Cover Letter</h3>")
+                cover_letter_output = gr.Textbox(
+                    label="",
+                    lines=15,
+                    show_copy_button=True,
+                    placeholder="Results will appear here after running the agent...",
+                    interactive=False
+                )
+            
+            # Interview Preparation Section
+            with gr.Group():
+                gr.Markdown("<h3>💼 Interview Preparation</h3>")
+                interview_output = gr.HTML(
+                    label="",
+                    value="<p style='color: #888; padding: 20px;'>Results will appear here after running the agent...</p>"
+                )
+            
+            # Role Expectations Section
+            with gr.Group():
+                gr.Markdown("<h3>🔬 Role Expectations</h3>")
+                role_output = gr.HTML(
+                    label="",
+                    value="<p style='color: #888; padding: 20px;'>Results will appear here after running the agent...</p>"
+                )
+            
+            # Skill Growth Plan Section
+            with gr.Group():
+                gr.Markdown("<h3>📚 Skill Growth Plan</h3>")
+                skill_growth_output = gr.HTML(
+                    label="",
+                    value="<p style='color: #888; padding: 20px;'>Results will appear here after running the agent...</p>"
+                )
+            
+            # Download Full Report Section
+            gr.Markdown("<div style='margin-top: 30px;'></div>")
+            with gr.Group():
+                gr.Markdown("<h3>📥 Download Complete Report</h3>")
+                full_report_output = gr.Textbox(
+                    label="",
+                    lines=3,
+                    visible=False,
+                    interactive=False
+                )
+                download_btn = gr.DownloadButton(
+                    label="📥 Download Full Report",
+                    variant="secondary",
+                    size="lg"
+                )
             
             # Button click handler
             agent_run_btn.click(
                 fn=process_application,
                 inputs=[agent_resume, agent_jd, agent_company],
                 outputs=[
-                    ats_output, ats_copy,
-                    cover_letter_output, cover_copy,
-                    bullets_output, bullets_copy,
-                    interview_output, interview_copy,
-                    role_output, role_copy,
-                    skill_growth_output, skill_copy
+                    ats_output,
+                    bullets_output,
+                    cover_letter_output,
+                    interview_output,
+                    role_output,
+                    skill_growth_output,
+                    full_report_output
                 ]
+            )
+            
+            # Wire download button to full report
+            full_report_output.change(
+                fn=prepare_download,
+                inputs=[full_report_output],
+                outputs=[download_btn]
             )
         
         # Tab 2: Ask the Agent

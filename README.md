@@ -1,27 +1,61 @@
 # 🎯 Resume → Job Application Agent
 
-An intelligent AI agent built with **LangGraph** and **Google Gemini** that automates job application preparation.
+An intelligent AI agent built with **LangGraph** and **Google Gemini** that automates comprehensive job application preparation with smart ATS analysis and personalized outputs.
 
-## 🚀 Features
+## ✨ Key Features
 
-- **ATS Score Analysis** - Match your resume against job requirements
-- **Tailored Cover Letter** - Auto-generated personalized cover letters
-- **Resume Optimization** - Improved bullet points aligned with JD
-- **Interview Prep** - Likely interview questions based on role
+### 🎯 Smart ATS Analysis
+- **Intelligent Skill Extraction** - Extracts skills ONLY from relevant sections (Skills, Projects, Experience)
+- **Accurate Matching** - Precise skill matching with no hallucination
+- **Score Calculation** - (Matched Skills / Required Skills) × 100
+
+### 📝 Conditional Resume Suggestions
+- **Score ≥ 90**: No suggestions needed
+- **Score ≥ 85**: Minimal feedback
+- **Score < 85**: 2-3 crisp, actionable suggestions
+
+### 📋 Complete Application Package
+1. **ATS Score Analysis** - Matched/missing skills breakdown
+2. **Resume Improvement Suggestions** - Conditional based on score
+3. **Tailored Cover Letter** - Personalized for the role
+4. **Optimized Resume Bullets** - STAR-method improvements
+5. **Interview Preparation** - 8-10 likely questions
+6. **Role Expectations** - Industry insights and trends
+7. **Skill Growth Plan** - Learning roadmap with resources
+
+### 💬 Interactive Q&A
+- Ask follow-up questions about your resume-JD match
+- Get instant answers based on analyzed documents
 
 ## 🏗️ Architecture
 
-Built using **LangGraph** state machine with 6 nodes:
-
+### LangGraph Workflow
 ```
-Parse → ATS Analysis → Cover Letter → Resume Optimizer → Interview Prep → Compile Output
+┌─────────┐     ┌──────────────┐     ┌─────────────────┐
+│  Parse  │ ──▶ │ ATS Analysis │ ──▶ │ Resume Improve  │
+└─────────┘     └──────────────┘     └─────────────────┘
+                                              │
+                                              ▼
+┌─────────────┐     ┌──────────────┐     ┌──────────────┐
+│ Self-Review │ ◀── │ Compile      │ ◀── │ Interview    │
+└─────────────┘     └──────────────┘     │ Prep + Role  │
+      │                                   └──────────────┘
+      ▼                                          ▲
+┌─────────────┐     ┌──────────────┐           │
+│   Revise    │ ──▶ │ Cover Letter │ ──────────┘
+└─────────────┘     └──────────────┘
 ```
 
-### Agent Tools (4)
-1. `calculate_ats_score` - Skills matching & scoring
+### Agent Tools (9)
+1. `calculate_ats_score` - Smart skill extraction & matching
 2. `generate_cover_letter` - Personalized cover letters
-3. `optimize_resume_bullets` - STAR-method bullet points
-4. `generate_interview_questions` - Role-specific prep
+3. `optimize_resume_bullets` - STAR-method improvements
+4. `generate_interview_questions` - Role-specific questions
+5. `generate_resume_improvements` - Conditional suggestions
+6. `research_role_expectations` - Industry insights
+7. `generate_learning_plan` - Skill development roadmap
+8. `self_review_output` - Quality assurance
+9. `revise_content` - Content refinement
 
 ## 📦 Installation
 
@@ -58,48 +92,91 @@ Get your free API key: https://aistudio.google.com/app/apikey
 python app.py
 ```
 
+The app will open in your browser at `http://localhost:7860`
+
 ### Steps:
-1. Upload your **Resume PDF**
-2. Upload **Job Description PDF**
-3. (Optional) Enter company name
-4. Click **Generate**
-5. Download the complete package
-
-## 🧪 Testing
-
-Use sample PDFs in `samples/` folder (create your own test files).
-
-## 🎥 Demo Video
-
-[Link to demo video]
+1. **Upload Resume PDF** - Your current resume
+2. **Upload Job Description PDF** - Target job posting
+3. **(Optional) Enter Company Name** - For personalization
+4. **Click "🚀 Run Agent"** - Process takes 30-90 seconds
+5. **Review Results** - 7 separate sections with insights
+6. **Download Full Report** - Complete package as text file
+7. **Ask Questions** - Use Q&A tab for follow-ups
 
 ## 🛠️ Tech Stack
 
-- **LangGraph** - Agent orchestration
-- **LangChain** - LLM framework
-- **Google Gemini** - LLM (gemini-1.5-flash)
-- **Gradio** - Web UI
-- **PyPDF2** - PDF parsing
+- **LangGraph** - Agent orchestration & state management
+- **LangChain** - LLM framework & prompt templates
+- **Google Gemini 2.5 Flash** - Fast, efficient LLM
+- **Gradio** - Modern web UI with card-based layout
+- **PyPDF2** - PDF text extraction
+- **Python-dotenv** - Environment management
 
-## 📊 LangGraph Workflow
+## 📊 Code Structure
 
-The agent uses a sequential state machine:
+```
+resume-job-agent/
+├── app.py              # Gradio UI & main application
+├── agent.py            # LangGraph workflow & nodes
+├── tools.py            # LLM-powered tools (9 functions)
+├── parser.py           # PDF parsing utilities
+├── requirements.txt    # Python dependencies
+├── .env               # API keys (create this)
+└── README.md          # This file
+```
 
-1. **Parse Node** - Initialize state
-2. **ATS Analysis** - Calculate match score
-3. **Cover Letter** - Generate personalized letter
-4. **Resume Optimizer** - Improve bullet points
-5. **Interview Prep** - Generate questions
-6. **Compile Output** - Create final package
+## 🎯 How It Works
+
+### 1. ATS Analysis (Smart & Accurate)
+- Extracts skills from Skills, Projects, Experience sections only
+- Matches against job requirements
+- Calculates precise score: (Matched / Required) × 100
+
+### 2. Conditional Suggestions
+- High scores (≥90): No suggestions
+- Good scores (≥85): Minimal feedback
+- Lower scores (<85): 2-3 actionable improvements
+
+### 3. Comprehensive Outputs
+Each section is generated independently:
+- Cover letter tailored to company & role
+- Resume bullets using STAR method
+- Interview questions (technical + behavioral)
+- Role expectations & industry trends
+- Learning plan with specific resources
+
+### 4. Quality Assurance
+- Self-review node critiques outputs
+- Revision node improves quality
+- Final package combines all sections
 
 ## 🎓 Hackathon Submission
 
 **Theme:** Building AI Agents with LangChain/LangGraph
 
 **Key Highlights:**
-- ✅ Multi-step agentic reasoning
-- ✅ Tool orchestration via LangGraph
-- ✅ Real-world utility (job applications)
-- ✅ Clean UI with Gradio
-- ✅ Free tier compatible (Gemini API)
+- ✅ **Multi-step Agentic Reasoning** - 9-node LangGraph workflow
+- ✅ **Conditional Logic** - Smart routing based on ATS score
+- ✅ **Tool Orchestration** - 9 specialized LLM tools
+- ✅ **State Management** - Typed state with LangGraph
+- ✅ **Real-world Utility** - Solves actual job application pain
+- ✅ **Clean UI** - Card-based Gradio interface
+- ✅ **Free Tier Compatible** - Uses Gemini 2.5 Flash
+- ✅ **No Hallucination** - Accurate skill extraction
+- ✅ **Quality Control** - Self-review & revision loop
 
+## 🎥 Demo Video
+
+[Link to demo video]
+
+## 📝 License
+
+MIT License - Feel free to use and modify!
+
+## 🤝 Contributing
+
+Contributions welcome! Please open an issue or PR.
+
+## 📧 Contact
+
+[Your contact information]

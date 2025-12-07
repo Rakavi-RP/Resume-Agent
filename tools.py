@@ -19,51 +19,73 @@ def calculate_ats_score(resume: str, jd: str) -> Dict[str, any]:
     """
     llm = create_llm()
     
-    prompt = PromptTemplate(
-        input_variables=["resume", "jd"],
-        template="""You are an ATS (Applicant Tracking System) analyzer.
+    # Step 1: Extract skills from resume (only from specific sections)
+    resume_prompt = PromptTemplate(
+        input_variables=["resume"],
+        template="""Extract ONLY explicit technical skills/tools from the following resume sections:
+- Skills / Technical Skills section
+- Projects section (tools/tech used)
+- Experience section (tools/tech used)
+
+DO NOT extract from:
+- Profile summary
+- Objective
+- General descriptive text
+- Education section
 
 Resume:
 {resume}
 
+Return ONLY a comma-separated list of technical skills/tools explicitly mentioned.
+Do NOT infer or hallucinate skills not explicitly stated.
+
+Skills:"""
+    )
+    
+    resume_skills_response = llm.invoke(resume_prompt.format(resume=resume))
+    resume_skills = [s.strip() for s in resume_skills_response.content.split(',') if s.strip()]
+    
+    # Step 2: Extract required skills from job description
+    jd_prompt = PromptTemplate(
+        input_variables=["jd"],
+        template="""Extract all required technical skills and tools from this job description.
+Include both must-have and nice-to-have skills.
+
 Job Description:
 {jd}
 
-Analyze the match between this resume and job description. Provide:
-1. ATS Score (0-100)
-2. Matched Skills (list)
-3. Missing Skills (list)
+Return ONLY a comma-separated list of technical skills/tools.
 
-Format your response EXACTLY as:
-SCORE: [number]
-MATCHED: [skill1, skill2, skill3]
-MISSING: [skill1, skill2, skill3]
-"""
+Skills:"""
     )
     
-    response = llm.invoke(prompt.format(resume=resume, jd=jd))
-    result = response.content
+    jd_skills_response = llm.invoke(jd_prompt.format(jd=jd))
+    jd_skills = [s.strip() for s in jd_skills_response.content.split(',') if s.strip()]
     
-    # Parse response
-    score = 0
-    matched = []
-    missing = []
+    # Step 3: Calculate matched and missing skills
+    resume_skills_lower = {skill.lower() for skill in resume_skills}
+    jd_skills_lower = {skill.lower() for skill in jd_skills}
     
-    for line in result.split('\n'):
-        if line.startswith('SCORE:'):
-            try:
-                score = int(line.split(':')[1].strip())
-            except:
-                score = 50
-        elif line.startswith('MATCHED:'):
-            matched = [s.strip() for s in line.split(':')[1].split(',')]
-        elif line.startswith('MISSING:'):
-            missing = [s.strip() for s in line.split(':')[1].split(',')]
+    matched_skills_lower = resume_skills_lower.intersection(jd_skills_lower)
+    missing_skills_lower = jd_skills_lower - resume_skills_lower
+    
+    # Map back to original case
+    matched_skills = [skill for skill in jd_skills if skill.lower() in matched_skills_lower]
+    missing_skills = [skill for skill in jd_skills if skill.lower() in missing_skills_lower]
+    
+    # Step 4: Calculate ATS score
+    if len(jd_skills) > 0:
+        score = int((len(matched_skills) / len(jd_skills)) * 100)
+    else:
+        score = 50  # Default if no skills found
+    
+    # Clamp score between 0 and 100
+    score = max(0, min(100, score))
     
     return {
         "score": score,
-        "matched_skills": matched,
-        "missing_skills": missing
+        "matched_skills": matched_skills,
+        "missing_skills": missing_skills
     }
 
 
@@ -149,6 +171,7 @@ Generate 8-10 likely interview questions for this role, including:
 - Questions about gaps or concerns in the resume
 - Company/role-specific questions
 
+IMPORTANT: Use PLAIN TEXT only. Do NOT use markdown syntax like **bold** or ###headers.
 Format each question numbered (1., 2., etc.)
 
 Interview Questions:
@@ -159,19 +182,28 @@ Interview Questions:
     return response.content
 
 
-def generate_resume_improvements(resume: str, jd: str, matched_skills: list, missing_skills: list) -> str:
+def generate_resume_improvements(resume: str, jd: str, matched_skills: list, missing_skills: list, ats_score: int = 0) -> str:
     """
-    Generate resume improvement suggestions for low ATS scores.
+    Generate resume improvement suggestions based on ATS score.
     
     Args:
         resume: Current resume text
         jd: Job description text
         matched_skills: Skills that matched
         missing_skills: Skills that are missing
+        ats_score: ATS score (0-100)
         
     Returns:
-        Detailed improvement suggestions
+        Improvement suggestions (conditional based on score)
     """
+    # Conditional logic based on ATS score
+    if ats_score >= 90:
+        return ""  # No suggestions needed
+    
+    if ats_score >= 85:
+        return "No major improvements needed. Your resume shows strong alignment with the job requirements."
+    
+    # For scores < 85, provide 2-3 crisp suggestions
     llm = create_llm()
     
     matched_str = ", ".join(matched_skills[:10])
@@ -179,7 +211,7 @@ def generate_resume_improvements(resume: str, jd: str, matched_skills: list, mis
     
     prompt = PromptTemplate(
         input_variables=["resume", "jd", "matched", "missing"],
-        template="""You are a resume improvement expert helping candidates with low ATS scores.
+        template="""You are a resume improvement expert.
 
 Current Resume:
 {resume}
@@ -190,18 +222,15 @@ Target Job Description:
 Matched Skills: {matched}
 Missing Skills: {missing}
 
-The candidate's ATS score is below 60, indicating significant gaps. Provide detailed, actionable improvement suggestions:
+Provide ONLY 2-3 short, crisp, actionable suggestions to improve the resume.
+Each suggestion should be 1-2 sentences maximum.
+Focus on the most impactful changes.
 
-1. **Skills to Add**: Specific missing skills to incorporate and where/how to add them
-2. **Keywords to Include**: Important keywords from the JD that are missing
-3. **Experience Reframing**: How to reframe existing experience to better match requirements
-4. **Certifications/Training**: Recommended certifications or courses to bridge gaps
-5. **Resume Structure**: Formatting or structural changes to improve ATS parsing
+IMPORTANT: Use PLAIN TEXT only. Do NOT use markdown syntax like **bold** or ###headers.
+Format as a numbered list (1., 2., 3.).
+NO long paragraphs. NO essays. Be concise.
 
-Format your response with clear sections using headers (###) and bullet points (•).
-
-Resume Improvement Suggestions:
-"""
+Suggestions:"""
     )
     
     response = llm.invoke(prompt.format(
@@ -242,12 +271,12 @@ Generated Job Application Package:
 
 Critically review this package and provide specific improvement suggestions for:
 
-1. **Cover Letter Quality**: Tone, personalization, impact, alignment with JD
-2. **Resume Bullets**: Clarity, quantification, action verbs, relevance
-3. **Interview Questions**: Completeness, difficulty level, relevance
-4. **Overall Coherence**: Consistency across all sections
+1. <b>Cover Letter Quality</b>: Tone, personalization, impact, alignment with JD
+2. <b>Resume Bullets</b>: Clarity, quantification, action verbs, relevance
+3. <b>Interview Questions</b>: Completeness, difficulty level, relevance
+4. <b>Overall Coherence</b>: Consistency across all sections
 
-Format your response with clear sections (###) and specific, actionable suggestions (•).
+Format your response with clear sections using HTML headers (<h4>) and specific, actionable suggestions (\u2022).
 Be constructive but critical - identify real weaknesses.
 
 Review Notes:
@@ -378,14 +407,15 @@ Job Title: {title}
 
 Research and provide detailed insights about this role:
 
-1. **Common Skills**: Industry-standard skills for this position
-2. **Key Responsibilities**: Typical day-to-day duties and expectations
-3. **Career Level**: Junior/Mid/Senior level indicators
-4. **Industry Trends**: Current trends affecting this role
-5. **Success Metrics**: How performance is typically measured
-6. **Growth Path**: Common career progression from this role
+1. Common Skills: Industry-standard skills for this position
+2. Key Responsibilities: Typical day-to-day duties and expectations
+3. Career Level: Junior/Mid/Senior level indicators
+4. Industry Trends: Current trends affecting this role
+5. Success Metrics: How performance is typically measured
+6. Growth Path: Common career progression from this role
 
-Format your response with clear sections (###) and bullet points (•).
+IMPORTANT: Use PLAIN TEXT only. Do NOT use markdown syntax like **bold** or ###headers.
+Format with numbered sections and bullet points (•).
 
 Role Expectations Research:
 """
@@ -420,17 +450,18 @@ Current Skills: {matched}
 
 Create a comprehensive learning plan to bridge the skills gap:
 
-1. **Priority Skills** (Learn First): Top 3-5 most critical skills with rationale
-2. **Learning Resources**: 
+1. Priority Skills (Learn First): Top 3-5 most critical skills with rationale
+2. Learning Resources: 
    - Online courses (Coursera, Udemy, etc.)
    - Books and documentation
    - Practice projects
    - Certifications worth pursuing
-3. **Timeline**: Realistic 3-6 month learning roadmap
-4. **Practice Projects**: Hands-on projects to build each skill
-5. **Milestones**: Checkpoints to track progress
+3. Timeline: Realistic 3-6 month learning roadmap
+4. Practice Projects: Hands-on projects to build each skill
+5. Milestones: Checkpoints to track progress
 
-Format with clear sections (###) and actionable items (•).
+IMPORTANT: Use PLAIN TEXT only. Do NOT use markdown syntax like **bold** or ###headers.
+Format with numbered sections and bullet points (\u2022).
 Be specific with course names, book titles, and project ideas.
 
 Skill Growth Plan:
