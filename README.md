@@ -177,6 +177,4 @@ MIT License - Feel free to use and modify!
 
 Contributions welcome! Please open an issue or PR.
 
-## 📧 Contact
 
-[Your contact information]
