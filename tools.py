@@ -12,38 +12,6 @@ def create_llm():
     return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
 
 
-def github_company_research(jd_text: str, company_name: str = None) -> str:
-    """
-    Use GitHub API to research company's tech presence (no auth needed).
-    
-    Args:
-        jd_text: Job description text
-        company_name: Optional company name
-        
-    Returns:
-        Plain text summary from GitHub
-    """
-    results = []
-    
-    # Extract probable role title from JD
-    role_title = extract_role_title(jd_text)
-    
-    # Search for company on GitHub if provided
-    if company_name:
-        print(f"🔍 Searching GitHub for company: {company_name}")
-        company_info = fetch_github_company_info(company_name)
-        if company_info and "No GitHub organization" not in company_info:
-            print(f"✅ Found GitHub info for {company_name}")
-            results.append(company_info)
-        else:
-            print(f"❌ No GitHub org found for {company_name}")
-    
-    if results:
-        return "\n\n".join(results)
-    else:
-        return "Could not find GitHub information for this company."
-
-
 def extract_role_title(jd_text: str) -> str:
     """Extract probable role title from job description."""
     # Common role patterns
@@ -74,50 +42,6 @@ def extract_role_title(jd_text: str) -> str:
             return role
     
     return None
-
-
-def fetch_github_company_info(company_name: str) -> str:
-    """
-    Fetch company info from GitHub API (no auth needed).
-    
-    Args:
-        company_name: Company name
-        
-    Returns:
-        Plain text summary or None if not found
-    """
-    try:
-        # Convert company name to likely GitHub org name
-        org_name = company_name.lower().replace(' ', '')
-        
-        # Fetch organization info
-        org_url = f"https://api.github.com/orgs/{org_name}"
-        org_response = requests.get(org_url, timeout=10)
-        
-        if org_response.status_code == 200:
-            org_data = org_response.json()
-            
-            # Fetch top repositories
-            repos_url = f"https://api.github.com/orgs/{org_name}/repos?sort=stars&per_page=5"
-            repos_response = requests.get(repos_url, timeout=10)
-            
-            if repos_response.status_code == 200:
-                repos = repos_response.json()
-                
-                # Build summary
-                summary_parts = []
-                summary_parts.append(f"COMPANY: {company_name}")
-                summary_parts.append(f"{org_data.get('name', company_name)} has {org_data.get('public_repos', 0)} public repositories on GitHub.")
-                
-                if org_data.get('description'):
-                    summary_parts.append(org_data['description'])
-                
-                return "\n".join(summary_parts)
-        
-        return f"No GitHub organization found for {company_name}."
-            
-    except Exception:
-        return None
 
 
 def calculate_ats_score(resume: str, jd: str) -> Dict[str, any]:

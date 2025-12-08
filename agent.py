@@ -37,13 +37,11 @@ class AgentState(TypedDict):
 
 
 def parse_node(state: AgentState) -> AgentState:
-    """Initial node - documents already parsed."""
     print("📄 Documents parsed and ready")
     return state
 
 
 def ats_analysis_node(state: AgentState) -> AgentState:
-    """Analyze ATS score and skill matching."""
     print("🔍 Analyzing ATS score...")
     
     try:
@@ -64,7 +62,6 @@ def ats_analysis_node(state: AgentState) -> AgentState:
 
 
 def cover_letter_node(state: AgentState) -> AgentState:
-    """Generate tailored cover letter."""
     print("✍️ Generating cover letter...")
     
     try:
@@ -83,7 +80,6 @@ def cover_letter_node(state: AgentState) -> AgentState:
 
 
 def resume_optimizer_node(state: AgentState) -> AgentState:
-    """Optimize resume bullet points."""
     print("📝 Optimizing resume bullets...")
     
     try:
@@ -98,7 +94,6 @@ def resume_optimizer_node(state: AgentState) -> AgentState:
 
 
 def resume_improvement_node(state: AgentState) -> AgentState:
-    """Generate resume improvement suggestions based on ATS score."""
     print(f"⚠️ ATS Score {state['ats_score']} - generating improvement suggestions...")
     
     try:
@@ -122,7 +117,6 @@ def resume_improvement_node(state: AgentState) -> AgentState:
 
 
 def interview_prep_node(state: AgentState) -> AgentState:
-    """Generate interview questions and research role expectations."""
     print("💼 Generating interview questions...")
     
     try:
@@ -146,7 +140,6 @@ def interview_prep_node(state: AgentState) -> AgentState:
 
 
 def compile_output_node(state: AgentState) -> AgentState:
-    """Generate learning plan from missing skills."""
     print("📚 Generating skill learning plan...")
     
     try:
@@ -161,7 +154,6 @@ def compile_output_node(state: AgentState) -> AgentState:
 
 
 def self_review_node(state: AgentState) -> AgentState:
-    """Self-review node - critiques the generated content."""
     print("🕵️ Running self-review on generated content...")
     
     try:
@@ -189,7 +181,6 @@ def self_review_node(state: AgentState) -> AgentState:
 
 
 def revise_output_node(state: AgentState) -> AgentState:
-    """Revise cover letter and bullets based on self-review."""
     print("✍️ Revising content based on review notes...")
     
     try:
@@ -216,7 +207,6 @@ def revise_output_node(state: AgentState) -> AgentState:
 
 
 def deep_resume_improvement_node(state: AgentState) -> AgentState:
-    """Generate deep resume improvement suggestions for low ATS scores (<70)."""
     print(f"🚨 Low ATS Score {state['ats_score']} (<70) - generating deep restructuring suggestions...")
     
     try:
@@ -243,7 +233,6 @@ def deep_resume_improvement_node(state: AgentState) -> AgentState:
 
 
 def route_after_ats(state: AgentState) -> str:
-    """Truly conditional routing based on ATS score thresholds."""
     score = state['ats_score']
     
     if score >= 90:
@@ -258,7 +247,7 @@ def route_after_ats(state: AgentState) -> str:
 
 
 def create_agent():
-    """Create the LangGraph agent workflow with conditional routing."""
+    
     
     # Create graph
     workflow = StateGraph(AgentState)
