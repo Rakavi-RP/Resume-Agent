@@ -13,7 +13,9 @@ from tools import (
     self_review_output,
     revise_content,
     research_role_expectations,
-    generate_learning_plan
+    generate_learning_plan,
+    github_company_research,
+    review_application_package
 )
 
 
@@ -31,6 +33,7 @@ class AgentState(TypedDict):
     interview_questions: str
     role_expectations: str
     learning_plan: str
+    review_notes: str
 
 
 def parse_node(state: AgentState) -> AgentState:
@@ -129,10 +132,11 @@ def interview_prep_node(state: AgentState) -> AgentState:
         print(f"❌ Error generating interview questions: {str(e)}")
         state["interview_questions"] = f"❌ Interview questions generation failed: {str(e)}"
     
+    
     print("🔬 Researching role expectations...")
     try:
-        role_research = research_role_expectations(state["jd"], state.get("company_name", "this role"))
-        state["role_expectations"] = role_research
+        # LLM-based role research
+        state["role_expectations"] = research_role_expectations(state["jd"], state.get("company_name", "this role"))
     except Exception as e:
         print(f"❌ Error researching role expectations: {str(e)}")
         state["role_expectations"] = f"❌ Role research failed: {str(e)}"
@@ -157,29 +161,53 @@ def compile_output_node(state: AgentState) -> AgentState:
 
 
 def self_review_node(state: AgentState) -> AgentState:
-    """Self-review node - skipped since we return structured data."""
-    print("✅ Self-review skipped (using structured output)")
+    """Self-review node - critiques the generated content."""
+    print("🕵️ Running self-review on generated content...")
+    
+    try:
+        from tools import review_application_package
+        
+        # Call review tool with all generated content
+        review_notes = review_application_package(
+            ats_score=state["ats_score"],
+            matched_skills=state["matched_skills"],
+            missing_skills=state["missing_skills"],
+            cover_letter=state["cover_letter"],
+            optimized_bullets=state["optimized_bullets"],
+            interview_questions=state["interview_questions"],
+            role_expectations=state["role_expectations"],
+            learning_plan=state["learning_plan"]
+        )
+        
+        state["review_notes"] = review_notes
+        print("✅ Review notes generated")
+    except Exception as e:
+        print(f"❌ Error in self-review: {str(e)}")
+        state["review_notes"] = "Review skipped due to error."
+    
     return state
 
 
 def revise_output_node(state: AgentState) -> AgentState:
     """Revise cover letter and bullets based on self-review."""
-    print("✍️ Revising content for quality improvements...")
+    print("✍️ Revising content based on review notes...")
     
     try:
-        # Simple revision prompt without full review
+        from tools import revise_content
+        
+        # Use review notes from self-review for targeted improvements
         revisions = revise_content(
-            state["cover_letter"],
-            state["optimized_bullets"],
-            "Improve clarity, impact, and alignment with job requirements",
-            state["resume"],
-            state["jd"]
+            cover_letter=state["cover_letter"],
+            optimized_bullets=state["optimized_bullets"],
+            review_notes=state["review_notes"],  # Use actual review notes
+            resume=state["resume"],
+            jd=state["jd"]
         )
         
         # Update state with revised content
         state["cover_letter"] = revisions["revised_cover_letter"]
         state["optimized_bullets"] = revisions["revised_bullets"]
-        print("✅ Content revised")
+        print("✅ Content revised based on review feedback")
     except Exception as e:
         print(f"❌ Error revising content: {str(e)}")
         # Keep original content if revision fails
@@ -187,14 +215,50 @@ def revise_output_node(state: AgentState) -> AgentState:
     return state
 
 
+def deep_resume_improvement_node(state: AgentState) -> AgentState:
+    """Generate deep resume improvement suggestions for low ATS scores (<70)."""
+    print(f"🚨 Low ATS Score {state['ats_score']} (<70) - generating deep restructuring suggestions...")
+    
+    try:
+        # Call the same tool but with deeper analysis for low scores
+        suggestions = generate_resume_improvements(
+            state["resume"],
+            state["jd"],
+            state["matched_skills"],
+            state["missing_skills"],
+            state["ats_score"]  # Pass low score for deeper suggestions
+        )
+        
+        # Add context that this is a deep review
+        if suggestions:
+            suggestions = f"⚠️ DEEP RESUME RESTRUCTURING NEEDED (ATS Score: {state['ats_score']})\n\n{suggestions}"
+        
+        state["improvement_suggestions"] = suggestions
+        print("✅ Deep improvement suggestions generated")
+    except Exception as e:
+        print(f"❌ Error generating deep improvement suggestions: {str(e)}")
+        state["improvement_suggestions"] = ""
+    
+    return state
+
+
 def route_after_ats(state: AgentState) -> str:
-    """Route to resume improvement (which handles conditional logic internally)."""
-    print(f"✅ ATS Score {state['ats_score']}: Routing to resume_improvement")
-    return "resume_improvement"
+    """Truly conditional routing based on ATS score thresholds."""
+    score = state['ats_score']
+    
+    if score >= 90:
+        print(f"🎯 High ATS Score {score} (≥90): Skipping to cover_letter")
+        return "cover_letter"
+    elif score >= 70:
+        print(f"✅ Good ATS Score {score} (70-89): Routing to resume_improvement")
+        return "resume_improvement"
+    else:
+        print(f"🚨 Low ATS Score {score} (<70): Routing to deep_resume_improvement")
+        return "deep_resume_improvement"
 
 
 def create_agent():
-    """Create the LangGraph agent workflow."""
+    """Create the LangGraph agent workflow with conditional routing."""
     
     # Create graph
     workflow = StateGraph(AgentState)
@@ -203,6 +267,7 @@ def create_agent():
     workflow.add_node("parse", parse_node)
     workflow.add_node("ats_analysis", ats_analysis_node)
     workflow.add_node("resume_improvement", resume_improvement_node)
+    workflow.add_node("deep_resume_improvement", deep_resume_improvement_node)
     workflow.add_node("generate_cover_letter", cover_letter_node)
     workflow.add_node("resume_optimizer", resume_optimizer_node)
     workflow.add_node("interview_prep", interview_prep_node)
@@ -214,17 +279,22 @@ def create_agent():
     workflow.set_entry_point("parse")
     workflow.add_edge("parse", "ats_analysis")
     
-    # Always route to resume_improvement after ATS
+    # Conditional routing after ATS analysis (3 paths)
     workflow.add_conditional_edges(
         "ats_analysis",
         route_after_ats,
         {
-            "resume_improvement": "resume_improvement"
+            "cover_letter": "generate_cover_letter",  # High score (≥90): skip improvements
+            "resume_improvement": "resume_improvement",  # Normal score (70-89)
+            "deep_resume_improvement": "deep_resume_improvement"  # Low score (<70)
         }
     )
     
-    # Continue workflow
+    # All improvement paths converge at cover_letter
     workflow.add_edge("resume_improvement", "generate_cover_letter")
+    workflow.add_edge("deep_resume_improvement", "generate_cover_letter")
+    
+    # Continue workflow
     workflow.add_edge("generate_cover_letter", "resume_optimizer")
     workflow.add_edge("resume_optimizer", "interview_prep")
     workflow.add_edge("interview_prep", "compile_output")
@@ -273,7 +343,8 @@ def run_agent(resume_text: str, jd_text: str, company_name: str = "the company")
         "optimized_bullets": "",
         "interview_questions": "",
         "role_expectations": "",
-        "learning_plan": ""
+        "learning_plan": "",
+        "review_notes": ""
     }
     
     # Run the agent

@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import os
 from parser import parse_documents
 from agent import run_agent
+import re
 from tools import (
     calculate_ats_score,
     generate_cover_letter,
@@ -65,15 +66,18 @@ def process_application(resume_file, jd_file, company_name):
             result["ats_section"],
             html_wrap(result["resume_suggestions_section"]),
             result["cover_letter_section"],
+            html_wrap(result["bullets_section"]),
             html_wrap(result["interview_section"]),
             html_wrap(result["role_expectations_section"]),
             html_wrap(result["skill_growth_section"]),
-            result["full_report"]
+            result["full_report"],
+            docs["resume"],  # Return raw resume text
+            docs["jd"]       # Return raw JD text
         )
     
     except Exception as e:
         error_msg = f"❌ Error: {str(e)}\n\nPlease check your API key and try again."
-        return (error_msg, html_wrap(""), "", html_wrap(""), html_wrap(""), html_wrap(""), "")
+        return (error_msg, html_wrap(""), "", html_wrap(""), html_wrap(""), html_wrap(""), html_wrap(""), "", "", "")
 
 
 def qa_about_match(question):
@@ -210,6 +214,96 @@ def prepare_download(full_report_text):
     return report_path
 
 
+def refine_with_preference(cover_letter, bullets, preference, resume_text, jd_text):
+    """
+    Refine output based on user preference using the backend tool.
+    """
+    if not cover_letter or not bullets or not resume_text:
+        return cover_letter, bullets
+        
+    try:
+        from tools import refine_with_preference_tool
+        
+        # Strip HTML wrappers if present to get raw text for processing
+        # Simple regex or string manipulation if needed, but the tool expects text
+        # For now assuming simple text or that the tool handles it.
+        # Actually, bullets might be wrapped in HTML div from previous steps. 
+        # But refine_with_preference_tool expects plain text bullets.
+        
+        # Handle HTML wrapping removal if needed (simple check)
+        
+
+        # Extract only text inside the HTML wrapper
+        clean_bullets = re.sub(r"<[^>]+>", "", bullets).strip()
+
+        result = refine_with_preference_tool(
+            cover_letter=cover_letter,
+            bullets=clean_bullets,
+            preference=preference,
+            resume_text=resume_text,
+            jd_text=jd_text
+        )
+        
+        # Re-wrap the refined bullets in HTML since the UI expects HTML for that component
+        # (The original bullets_output is gr.HTML, cover_letter is gr.Textbox)
+        # We need to maintain consistency.
+        
+        refined_cover_letter = result["cover_letter"]
+        refined_bullets = result["bullets"]
+        
+        # Wrap bullets again for consistent UI rendering 
+        # (using html_wrap function which we can't call directly if it's not in scope or just re-apply simple div)
+        # Note: html_wrap is defined in app.py, so we can use it.
+        refined_bullets_html = html_wrap(refined_bullets)
+        
+        return refined_cover_letter, refined_bullets_html
+        
+    except Exception as e:
+        return f"Error: {str(e)}", bullets
+
+
+def populate_refinement_options(resume_text, jd_text, cover_letter, bullets):
+    """
+    Generate dynamic refinement options based on the application package.
+    
+    Returns:
+        gr.Dropdown update with new choices
+    """
+    if not resume_text or not cover_letter:
+        return gr.Dropdown(choices=["No options available yet"], value=None)
+    
+    try:
+        from tools import generate_refinement_options
+        
+        # Strip HTML from bullets if needed
+        clean_bullets = bullets
+        if isinstance(bullets, str) and '<div' in bullets:
+            # Simple HTML tag removal
+            import re
+            clean_bullets = re.sub(r'<[^>]+>', '', bullets)
+        
+        options = generate_refinement_options(
+            resume_text=resume_text,
+            jd_text=jd_text,
+            cover_letter=cover_letter,
+            bullets=clean_bullets
+        )
+
+        
+        # Return dropdown update with new choices and first option selected
+        return gr.Dropdown(choices=options, value=options[0] if options else None)
+        
+    except Exception as e:
+        print(f"Error populating refinement options: {str(e)}")
+        # Fallback options
+        fallback = [
+            "Make tone more professional",
+            "Increase technical depth",
+            "Focus on quantifiable achievements"
+        ]
+        return gr.Dropdown(choices=fallback, value=fallback[0])
+
+
 
 # Create Gradio interface with tabs
 with gr.Blocks(title="Resume Job Application Agent", theme=gr.themes.Soft()) as demo:
@@ -280,6 +374,32 @@ with gr.Blocks(title="Resume Job Application Agent", theme=gr.themes.Soft()) as 
                     interactive=False
                 )
             
+            # Optimized Resume Bullets Section
+            with gr.Group():
+                gr.Markdown("<h3>✨ Optimized Resume Bullets</h3>")
+                optimized_bullets_output = gr.HTML(
+                    label="",
+                    value="<p style='color: #888; padding: 20px;'>Results will appear here after running the agent...</p>"
+                )
+            
+            # Refinement Section
+            gr.Markdown("<div style='margin-bottom: 10px;'></div>")
+            with gr.Group():
+                gr.Markdown("<h3>✨ Refine Results</h3>")
+                with gr.Row():
+                    refine_preference = gr.Dropdown(
+                        label="🎛 Final Touch Preference",
+                        choices=[],
+                        value=None,
+                        scale=3,
+                        interactive=True
+                    )
+                    refine_btn = gr.Button("✨ Refine Output", variant="secondary", scale=1)
+            
+            # Hidden state components for refinement
+            resume_text_hidden = gr.State("")
+            jd_text_hidden = gr.State("")
+            
             # Interview Preparation Section
             with gr.Group():
                 gr.Markdown("<h3>💼 Interview Preparation</h3>")
@@ -328,10 +448,38 @@ with gr.Blocks(title="Resume Job Application Agent", theme=gr.themes.Soft()) as 
                     ats_output,
                     bullets_output,
                     cover_letter_output,
+                    optimized_bullets_output,  # New: Optimized bullets
                     interview_output,
                     role_output,
                     skill_growth_output,
-                    full_report_output
+                    full_report_output,
+                    resume_text_hidden,  # New: Hidden resume text
+                    jd_text_hidden       # New: Hidden JD text
+                ]
+            ).then(
+                fn=populate_refinement_options,
+                inputs=[
+                    resume_text_hidden,
+                    jd_text_hidden,
+                    cover_letter_output,
+                    optimized_bullets_output
+                ],
+                outputs=[refine_preference]
+            )
+            
+            # Wire refinement button
+            refine_btn.click(
+                fn=refine_with_preference,
+                inputs=[
+                    cover_letter_output,
+                    optimized_bullets_output,
+                    refine_preference,
+                    resume_text_hidden,
+                    jd_text_hidden
+                ],
+                outputs=[
+                    cover_letter_output,
+                    optimized_bullets_output
                 ]
             )
             
