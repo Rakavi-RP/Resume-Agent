@@ -68,23 +68,67 @@ Open `http://localhost:7860` in your browser.
 
 ## Architecture
 
-Built with **LangGraph**, the workflow looks like this:
+Built with **LangGraph**, the workflow uses:
+- **10 Nodes** (state transformation functions)
+- **Conditional Edges** (decision-based routing)
+- **State Management** (TypedDict with 15+ fields)
+
+### LangGraph Structure
 
 ```
-Parse → ATS Analysis → Conditional Routing
-                            ↓
-                    (Score < 70: Deep Improvements)
-                    (Score 70-85: Standard Suggestions)
-                    (Score > 85: Minimal Feedback)
-                            ↓
-Cover Letter + Resume Bullets + Interview Prep
-                            ↓
-                    Self-Review (Agent critiques itself)
-                            ↓
-                    Revision (Agent improves based on critique)
-                            ↓
-                    Final Package
+                    ┌─────────┐
+                    │  Parse  │ (Entry Point)
+                    └────┬────┘
+                         │
+                    ┌────▼────────┐
+                    │ ATS Analysis│
+                    └────┬────────┘
+                         │
+              ┌──────────┴──────────┐ (Conditional Routing)
+              │   route_after_ats   │
+              └──┬────────┬────────┬┘
+                 │        │        │
+        Score≥90 │   70≤S<90│  S<70│
+                 │        │        │
+         ┌───────▼──┐  ┌──▼────────────┐  ┌──▼──────────────────┐
+         │ (Skip)   │  │Resume         │  │Deep Resume          │
+         │          │  │Improvement    │  │Improvement          │
+         └───────┬──┘  └──┬────────────┘  └──┬──────────────────┘
+                 │        │                   │
+                 └────────┴───────────────────┘
+                              │
+                    ┌─────────▼──────────┐
+                    │ Cover Letter       │
+                    └─────────┬──────────┘
+                              │
+                    ┌─────────▼──────────┐
+                    │ Resume Optimizer   │
+                    └─────────┬──────────┘
+                              │
+                    ┌─────────▼──────────┐
+                    │ Interview Prep     │
+                    └─────────┬──────────┘
+                              │
+                    ┌─────────▼──────────┐
+                    │ Compile Output     │
+                    └─────────┬──────────┘
+                              │
+                    ┌─────────▼──────────┐
+                    │ Self Review        │ (Agent critiques itself)
+                    └─────────┬──────────┘
+                              │
+                    ┌─────────▼──────────┐
+                    │ Revise Output      │ (Agent improves based on critique)
+                    └─────────┬──────────┘
+                              │
+                           (END)
 ```
+
+**Key LangGraph Features:**
+- **Conditional Edges:** `route_after_ats` function decides path based on ATS score
+- **State Transitions:** Each node transforms the `AgentState` TypedDict
+- **Branching:** 3 parallel paths after ATS analysis that converge at cover letter
+- **Sequential Flow:** Self-review → Revision creates improvement loop
 
 ### The 9 Tools
 
