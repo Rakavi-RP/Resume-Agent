@@ -86,10 +86,10 @@ Built with **LangGraph**, the workflow uses:
                          │
               ┌──────────┴──────────┐ (Conditional Routing)
               │   route_after_ats   │
-              └──┬────────┬────────┬┘
-                 │        │        │
-        Score≥90 │   70≤S<90│  S<70│
-                 │        │        │
+              └──┬────────┬────────┬┘        
+                 │        │        |_________          
+        Score≥90 │   70≤S<90                 │S<70
+                 │        │                  │
          ┌───────▼──┐  ┌──▼────────────┐  ┌──▼──────────────────┐
          │ (Skip)   │  │Resume         │  │Deep Resume          │
          │          │  │Improvement    │  │Improvement          │
@@ -130,21 +130,21 @@ Built with **LangGraph**, the workflow uses:
 - **Branching:** 3 parallel paths after ATS analysis that converge at cover letter
 - **Sequential Flow:** Self-review → Revision creates improvement loop
 
-### The 9 Tools
+### The 11 Tools
 
 Each tool is a specialized LLM call with a specific prompt:
 
-1. **calculate_ats_score** - Smart skill extraction from resume sections
-2. **generate_cover_letter** - Personalized to company and role
-3. **optimize_resume_bullets** - STAR method formatting
-4. **generate_interview_questions** - Technical + behavioral questions
-5. **generate_resume_improvements** - Conditional based on ATS score
-6. **research_role_expectations** - Industry insights and trends
-7. **generate_learning_plan** - Skill development roadmap
-8. **self_review_output** - Quality assurance check
-9. **revise_content** - Content refinement based on review
-10. **refine_with_preference_tool** - User-guided content adjustment
-11. **generate_refinement_options** - LLM-generated context-specific options 
+1. **calculate_ats_score** - Finds skills in your resume and matches them with job requirements
+2. **generate_cover_letter** - Writes a personalized cover letter for the company
+3. **optimize_resume_bullets** - Improves your resume bullet points using STAR method
+4. **generate_interview_questions** - Creates likely interview questions for the role
+5. **generate_resume_improvements** - Suggests resume changes based on your ATS score
+6. **research_role_expectations** - Researches what the role typically requires
+7. **generate_learning_plan** - Creates a plan to learn missing skills
+8. **self_review_output** - Agent reviews its own work and finds issues
+9. **revise_content** - Agent fixes issues found in self-review
+10. **refine_with_preference_tool** - Rewrites content based on user's choice
+11. **generate_refinement_options** - Creates custom refinement suggestions for this specific job 
 
 ## File Structure
 

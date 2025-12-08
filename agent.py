@@ -1,5 +1,3 @@
-"""LangGraph agent for resume job application workflow."""
-
 from typing import TypedDict, Annotated
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
@@ -14,13 +12,11 @@ from tools import (
     revise_content,
     research_role_expectations,
     generate_learning_plan,
-    github_company_research,
     review_application_package
 )
 
 
 class AgentState(TypedDict):
-    """State for the agent workflow."""
     resume: str
     jd: str
     company_name: str
@@ -102,7 +98,7 @@ def resume_improvement_node(state: AgentState) -> AgentState:
             state["jd"],
             state["matched_skills"],
             state["missing_skills"],
-            state["ats_score"]  # Pass ATS score for conditional logic
+            state["ats_score"]
         )
         state["improvement_suggestions"] = suggestions
         if suggestions:
@@ -126,10 +122,8 @@ def interview_prep_node(state: AgentState) -> AgentState:
         print(f"❌ Error generating interview questions: {str(e)}")
         state["interview_questions"] = f"❌ Interview questions generation failed: {str(e)}"
     
-    
     print("🔬 Researching role expectations...")
     try:
-        # LLM-based role research
         state["role_expectations"] = research_role_expectations(state["jd"], state.get("company_name", "this role"))
     except Exception as e:
         print(f"❌ Error researching role expectations: {str(e)}")
@@ -159,7 +153,6 @@ def self_review_node(state: AgentState) -> AgentState:
     try:
         from tools import review_application_package
         
-        # Call review tool with all generated content
         review_notes = review_application_package(
             ats_score=state["ats_score"],
             matched_skills=state["matched_skills"],
@@ -186,22 +179,19 @@ def revise_output_node(state: AgentState) -> AgentState:
     try:
         from tools import revise_content
         
-        # Use review notes from self-review for targeted improvements
         revisions = revise_content(
             cover_letter=state["cover_letter"],
             optimized_bullets=state["optimized_bullets"],
-            review_notes=state["review_notes"],  # Use actual review notes
+            review_notes=state["review_notes"],
             resume=state["resume"],
             jd=state["jd"]
         )
         
-        # Update state with revised content
         state["cover_letter"] = revisions["revised_cover_letter"]
         state["optimized_bullets"] = revisions["revised_bullets"]
         print("✅ Content revised based on review feedback")
     except Exception as e:
         print(f"❌ Error revising content: {str(e)}")
-        # Keep original content if revision fails
     
     return state
 
@@ -210,16 +200,14 @@ def deep_resume_improvement_node(state: AgentState) -> AgentState:
     print(f"🚨 Low ATS Score {state['ats_score']} (<70) - generating deep restructuring suggestions...")
     
     try:
-        # Call the same tool but with deeper analysis for low scores
         suggestions = generate_resume_improvements(
             state["resume"],
             state["jd"],
             state["matched_skills"],
             state["missing_skills"],
-            state["ats_score"]  # Pass low score for deeper suggestions
+            state["ats_score"]
         )
         
-        # Add context that this is a deep review
         if suggestions:
             suggestions = f"⚠️ DEEP RESUME RESTRUCTURING NEEDED (ATS Score: {state['ats_score']})\n\n{suggestions}"
         
@@ -247,12 +235,8 @@ def route_after_ats(state: AgentState) -> str:
 
 
 def create_agent():
-    
-    
-    # Create graph
     workflow = StateGraph(AgentState)
     
-    # Add nodes
     workflow.add_node("parse", parse_node)
     workflow.add_node("ats_analysis", ats_analysis_node)
     workflow.add_node("resume_improvement", resume_improvement_node)
@@ -264,60 +248,35 @@ def create_agent():
     workflow.add_node("self_review", self_review_node)
     workflow.add_node("revise_output", revise_output_node)
     
-    # Define edges (workflow)
     workflow.set_entry_point("parse")
     workflow.add_edge("parse", "ats_analysis")
     
-    # Conditional routing after ATS analysis (3 paths)
     workflow.add_conditional_edges(
         "ats_analysis",
         route_after_ats,
         {
-            "cover_letter": "generate_cover_letter",  # High score (≥90): skip improvements
-            "resume_improvement": "resume_improvement",  # Normal score (70-89)
-            "deep_resume_improvement": "deep_resume_improvement"  # Low score (<70)
+            "cover_letter": "generate_cover_letter",
+            "resume_improvement": "resume_improvement",
+            "deep_resume_improvement": "deep_resume_improvement"
         }
     )
     
-    # All improvement paths converge at cover_letter
     workflow.add_edge("resume_improvement", "generate_cover_letter")
     workflow.add_edge("deep_resume_improvement", "generate_cover_letter")
     
-    # Continue workflow
     workflow.add_edge("generate_cover_letter", "resume_optimizer")
     workflow.add_edge("resume_optimizer", "interview_prep")
     workflow.add_edge("interview_prep", "compile_output")
     
-    # Self-review and revision chain
     workflow.add_edge("compile_output", "self_review")
     workflow.add_edge("self_review", "revise_output")
     workflow.add_edge("revise_output", END)
     
-    # Compile
     app = workflow.compile()
     return app
 
 
 def run_agent(resume_text: str, jd_text: str, company_name: str = "the company") -> dict:
-    """
-    Run the complete agent workflow.
-    
-    Args:
-        resume_text: Extracted resume text
-        jd_text: Extracted job description text
-        company_name: Company name for cover letter
-        
-    Returns:
-        Dictionary with separate sections for UI display:
-        - ats_section: ATS score and skills analysis
-        - resume_suggestions_section: Resume improvement suggestions
-        - cover_letter_section: Generated cover letter
-        - bullets_section: Optimized resume bullets
-        - interview_section: Interview questions
-        - role_expectations_section: Role research
-        - skill_growth_section: Learning plan
-        - full_report: Complete combined report
-    """
     agent = create_agent()
     
     initial_state = {
@@ -336,10 +295,8 @@ def run_agent(resume_text: str, jd_text: str, company_name: str = "the company")
         "review_notes": ""
     }
     
-    # Run the agent
     final_state = agent.invoke(initial_state)
     
-    # Build ATS section (plain text, no markdown)
     matched_skills_text = "\n".join(f"  • {skill}" for skill in final_state['matched_skills'][:15])
     missing_skills_text = "\n".join(f"  • {skill}" for skill in final_state['missing_skills'][:15])
     
@@ -352,25 +309,18 @@ MISSING SKILLS:
 {missing_skills_text}
 """
     
-    # Resume suggestions section (separate from ATS)
     resume_suggestions_section = final_state.get("improvement_suggestions", "")
     
-    # Cover letter section
     cover_letter_section = final_state["cover_letter"]
     
-    # Optimized bullets section
     bullets_section = final_state["optimized_bullets"]
     
-    # Interview preparation section
     interview_section = final_state["interview_questions"]
     
-    # Role expectations section
     role_expectations_section = final_state["role_expectations"]
     
-    # Skill growth plan section
     skill_growth_section = final_state["learning_plan"]
     
-    # Build full report combining all sections
     full_report = f"""
 {'='*80}
 COMPLETE JOB APPLICATION PACKAGE
@@ -419,7 +369,6 @@ END OF REPORT
 {'='*80}
 """
     
-    # Return structured dictionary
     return {
         "ats_section": ats_section,
         "resume_suggestions_section": resume_suggestions_section,
