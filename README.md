@@ -144,7 +144,7 @@ Each tool is a specialized LLM call with a specific prompt:
 8. **self_review_output** - Quality assurance check
 9. **revise_content** - Content refinement based on review
 10. **refine_with_preference_tool** - User-guided content adjustment
-11. **generate_refinement_options** - LLM-generated context-specific options
+11. **generate_refinement_options** - LLM-generated context-specific options 
 
 ## File Structure
 
